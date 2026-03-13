@@ -1,0 +1,117 @@
+﻿@page "/response/{ResponseId:int}"
+@attribute [Authorize(Roles = "Admin,Student,Employee")]
+
+@inject Front.Consumer.UserConsumer UserConsumer
+@inject NavigationManager Nav
+@using Shared
+@using Microsoft.AspNetCore.Authorization
+@inject Front.Auth.CustomAuthStateProvider AuthStateProvider
+
+
+
+
+
+<h4 class="mb-3">Response Details</h4>
+
+@if (loading)
+{
+    <div class="alert alert-secondary">Loading...</div>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+else if (details is null)
+{
+    <div class="alert alert-warning">Response not found.</div>
+}
+else
+{
+    <div class="card mb-3 shadow-sm">
+        <div class="card-body">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <h5 class="mb-1">@details.SurveyTitle</h5>
+                    @if (isAdmin)
+                    {
+                        <div class="text-muted small">
+                            User: @(string.IsNullOrWhiteSpace(details.First_name) ? "[EMPTY]" : details.First_name)
+                        </div>
+                    }
+                </div>
+                <div class="text-muted small">
+                    Submitted: @details.SubmittedAt.ToString("yyyy-MM-dd hh:mm tt")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @foreach (var q in details.Items)
+    {
+        <div class="card shadow-sm border-0 question-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <strong>@q.QuestionText</strong>
+                    @if (q.IsRequired)
+                    {
+                        <span class="text-danger">*</span>
+                    }
+                    <span class="badge bg-light text-dark ms-2">@q.Type</span>
+                </div>
+
+                @if (q.Answers is null || q.Answers.Count == 0)
+                {
+                    <div class="text-muted">No answer.</div>
+        
+                    <OpenResponse />
+                }
+                else
+                {
+                    <ul class="mb-0">
+                        @foreach (var a in q.Answers)
+                        {
+                            <li>@a</li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    }
+
+@*     <button class="btn btn-outline-secondary" @onclick="() => Nav.NavigateTo("/admin/response")">
+        Back
+    </button> *@
+}
+
+@code {
+    [Parameter] public int ResponseId { get; set; }
+
+    private bool loading = true;
+    private string? error;
+    private ResponseDetailsDto? details;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            loading = true;
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            isAdmin = user.IsInRole("Admin");
+            details = await UserConsumer.GetResponseDetailsAsync(ResponseId);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    bool isAdmin;
+
+
+
+}

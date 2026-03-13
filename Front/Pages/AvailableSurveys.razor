@@ -1,0 +1,50 @@
+﻿@page "/surveys"
+@attribute [Authorize(Roles = "Student,Employee")]
+
+@inject Front.Consumer.UserConsumer UserConsumer
+@inject NavigationManager Nav
+@using Shared
+@using Microsoft.AspNetCore.Authorization
+
+
+<h4>Available Surveys</h4>
+
+@if (loading)
+{
+    <p>Loading...</p>
+}
+else if (surveys.Count == 0)
+{
+    <div class="alert alert-info">No surveys available.</div>
+}
+else
+{
+    <div class="list-group">
+        @foreach (var s in surveys)
+        {
+            <button class="list-group-item list-group-item-action"
+                    @onclick="() => OpenSurvey(s.SurveyId)">
+                <div class="d-flex justify-content-between">
+                    <strong>@s.Title</strong>
+                    <small>@s.StartDate.ToShortDateString() - @s.EndDate.ToShortDateString()</small>
+                </div>
+                <div class="text-muted">@s.Description</div>
+            </button>
+        }
+    </div>
+}
+
+@code {
+    private bool loading = true;
+    private List<SurveyDto> surveys = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        loading = true;
+        surveys = await UserConsumer.AllSurvey();
+        loading = false;
+    }
+
+    private void OpenSurvey(int surveyId)
+        => Nav.NavigateTo($"/surveys/{surveyId}");
+}

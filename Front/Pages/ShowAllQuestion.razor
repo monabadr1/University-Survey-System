@@ -1,0 +1,80 @@
+﻿@page "/ShowAllQuestion/{SurveyId:int}"
+@attribute [Authorize(Roles = "Admin")]
+@using Shared
+@inject Front.Consumer.SurveyConsumer SurveyConsumer
+@using Microsoft.AspNetCore.Authorization
+
+<h4 class="mb-4">Questions – Survey @SurveyId</h4>
+
+@if (questions == null || questions.Count == 0)
+{
+    <div class="alert alert-info">No questions added yet.</div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var q in questions)
+        {
+            <div class="col-12">
+                <div class="card shadow-sm border-0 question-card">
+                    <div class="card-body">
+
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="mb-0 fw-semibold">@q.questiontext</h6>
+                            <span class="badge @(q.Type == QuestionType.Text ? "bg-secondary" : "bg-success")">
+                                @q.Type
+                            </span>
+                        </div>
+
+                        @if (q.Type == QuestionType.MultipleChoice || q.Type == QuestionType.SingleChoice)
+                        {
+                            <ul class="list-group list-group-flush mt-3">
+                                @foreach (var option in q.Options)
+                                {
+                                    <li class="list-group-item px-0">
+                                        @option.Text
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <div class="text-muted fst-italic mt-3">
+                                Text answer
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+
+@code {
+    [Parameter]
+    public int SurveyId { get; set; }
+    
+
+    private bool loading = true;
+    private List<QuestionDto> questions = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+
+        questions = await SurveyConsumer.GetSurveyQuestionAsync(SurveyId);
+
+
+        foreach (var q in questions)
+        {
+            if (q.Type == QuestionType.SingleChoice ||
+                q.Type == QuestionType.MultipleChoice)
+            {
+                q.Options = await SurveyConsumer.GetQuestionOptionsAsync(q.QuestionId);
+            }
+        }
+
+        loading = false;
+    }
+}

@@ -1,0 +1,47 @@
+﻿@page "/my-responses"
+@attribute [Authorize(Roles="Student,Employee")]
+
+@inject Front.Consumer.UserConsumer UserConsumer
+@inject NavigationManager Nav
+@using Shared
+@using Microsoft.AspNetCore.Authorization
+
+
+<h4>My Responses</h4>
+
+@if (loading) { <p>Loading...</p> }
+else if (responses.Count == 0) { <div class="alert alert-info">No responses yet.</div> }
+else
+{
+    <div class="list-group">
+        @foreach (var r in responses)
+        {
+            <button type="button"
+                    class="list-group-item list-group-item-action"
+                    @onclick="() => OpenResponse(r.ResponseId)">
+                <div class="d-flex justify-content-between">
+                    <strong>@r.Title</strong>
+                    <span>@r.SubmittedAt.ToString("yyyy-MM-dd")</span>
+                </div>
+            </button>
+        }
+    </div>
+
+}
+
+@code{
+    bool loading=true;
+    List<ResponseDto> responses=new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        loading=true;
+        responses = await UserConsumer.AllResponse();
+        loading=false;
+    }
+    void OpenResponse(int id)
+    {
+        Nav.NavigateTo($"/response/{id}");
+    }
+
+}

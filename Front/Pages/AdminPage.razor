@@ -1,0 +1,131 @@
+﻿@page "/admin/surveys"
+@attribute [Authorize(Roles = "Admin")]
+@inject Front.Consumer.SurveyConsumer SurveyConsumer
+@inject NavigationManager Nav
+@using Shared
+@using Microsoft.AspNetCore.Authorization
+@inject Front.Consumer.UserConsumer UserConsumer
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <!-- شلنا كلمة Surveys زي ما طلبتي -->
+        <div class="text-muted small">Admin</div>
+    </div>
+
+    <button class="btn btn-dark px-3" @onclick="GoNew">
+        + New Survey 
+    </button>
+</div>
+
+@if (loading)
+{
+    <div class="alert alert-secondary">Loading...</div>
+}
+else if (surveys is null || surveys.Count == 0)
+{
+    <div class="alert alert-info">No surveys yet.</div>
+}
+else
+{
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle admin-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Title</th>
+                            <th>Target</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Status</th>
+                            <th class="text-end pe-3" style="width:260px;">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var s in surveys)
+                        {
+                            <tr>
+                                <td class="ps-3 fw-semibold">@s.Title</td>
+                                <td>@s.TargetGroups</td>
+                                <td>@s.StartDate.ToShortDateString()</td>
+                                <td>@s.EndDate.ToShortDateString()</td>
+
+                                <td>
+                                    <span class="@GetStatusBadgeClass(s.Statue)">
+                                        @s.Statue
+                                    </span>
+                                </td>
+
+                                <td class="text-end pe-3">
+                                    <button class="btn btn-sm btn-outline-dark me-2"
+                                            title="Open"
+                                            @onclick="() => OpenQuestions(s.SurveyId)">
+                                        Open
+                                    </button>
+
+                                    @if (s.Statue == Shared.Statues.Draft)
+                                    {
+                                        <button class="btn btn-sm btn-success me-2"
+                                                title="Publish"
+                                                @onclick="() => Publish(s.SurveyId)">
+                                            Publish
+                                        </button>
+                                    }
+
+                                    @if (s.Statue == Shared.Statues.Published)
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                title="Close"
+                                                @onclick="() => Close(s.SurveyId)">
+                                            Close
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool loading = true;
+    private List<SurveyDto> surveys = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        loading = true;
+        surveys = await UserConsumer.AllSurvey();
+        loading = false;
+    }
+
+    private void GoNew() => Nav.NavigateTo("/admin/surveys/addSurvey");
+    private void OpenQuestions(int id) => Nav.NavigateTo($"/ShowAllQuestion/{id}");
+
+    private async Task Publish(int id)
+    {
+        await SurveyConsumer.PublishSurveyAsync(id);
+        await Reload();
+    }
+
+    private async Task Close(int id)
+    {
+        await SurveyConsumer.CloseSurveyAsync(id);
+        await Reload();
+    }
+
+    private string GetStatusBadgeClass(Shared.Statues status) => status switch
+    {
+        Shared.Statues.Draft => "badge bg-secondary",
+        Shared.Statues.Published => "badge bg-success",
+        _ => "badge bg-dark"
+    };
+}

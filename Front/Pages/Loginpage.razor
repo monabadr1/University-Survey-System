@@ -1,0 +1,89 @@
+﻿@page "/login"
+@using Front.Consumer 
+@using Front.Auth
+@inject AuthConsumer AuthConsumer
+@inject NavigationManager Navigation
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject Front.Auth.CustomAuthStateProvider AuthState
+@inject Front.Auth.TokenStorage tokenStorage
+
+
+
+
+<div class="d-flex justify-content-center align-items-center vh-100">
+    <div class="card p-4 shadow" style="width:350px">
+        <h4 class="text-center mb-3">Login</h4>
+
+        <input class="form-control mb-2" placeholder="Email" @bind="email" />
+        <input type="password" class="form-control mb-3" placeholder="Password" @bind="password" />
+
+        <button class="btn btn-primary w-100" @onclick="LoginUser">
+            Login
+        </button>
+
+        <a href="/register" class="text-center mt-2 d-block">Create account</a>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-2">@errorMessage</div>
+        }
+    </div>
+</div>
+
+
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger mt-2">@errorMessage</div>
+}
+
+@code {
+    private string email = "";
+    private string password = "";
+    private string errorMessage = "";
+    private bool loading = false;
+
+
+    private async Task LoginUser()
+    {
+        errorMessage = "";
+        loading = true;
+
+        try
+        {
+            var token = await AuthConsumer.LoginAsync(new Shared.LoginDto
+            {
+                Email = email,
+                Password = password
+            });
+
+            await AuthState.MarkUserAsAuthenticate(token);
+            var role = JwtHelper.GetRole(token);
+
+            if (role == "Admin")
+            {
+                Navigation.NavigateTo("/admin/surveys", true);
+            }
+            else if (role == "Student")
+            {
+                Navigation.NavigateTo("/surveys", true);
+            }
+            else if (role == "Employee")
+            {
+                Navigation.NavigateTo("/surveys", true);
+            }
+        }
+        catch
+        {
+            errorMessage = "Login failed. Check email/password.";
+        }
+        finally
+        {
+            loading = false;
+        }
+
+       
+
+
+    }
+        }

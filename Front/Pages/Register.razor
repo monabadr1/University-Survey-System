@@ -1,0 +1,76 @@
+﻿@page "/register"
+@using System.ComponentModel.DataAnnotations
+@using Front.Consumer
+@using Shared
+@inject AuthConsumer AuthConsumer
+@inject NavigationManager Navigation
+
+<div class="d-flex justify-content-center align-items-center vh-100">
+    <div class="card p-4 shadow" style="width:380px">
+        <h4 class="text-center mb-3">Register</h4>
+
+        <EditForm Model="model" OnValidSubmit="RegisterUser">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+
+            <div class="mb-2">
+                <InputText class="form-control" placeholder="Email" @bind-Value="model.Email" />
+                <ValidationMessage For="@(() => model.Email)" />
+            </div>
+            <div class="mb-2">
+                <InputText class="form-control" placeholder="First_name" @bind-Value="model.First_name" />
+                <ValidationMessage For="@(() => model.First_name)" />
+            </div>
+            <div class="mb-2">
+                <InputText class="form-control" placeholder="Last_name" @bind-Value="model.Last_name" />
+                <ValidationMessage For="@(() => model.Last_name)" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Role</label>
+                <InputSelect class="form-select" @bind-Value="model.Role">
+                    <option value="@Role.Student">Student</option>
+                    <option value="@Role.Employee">Employee</option>
+                </InputSelect>
+            </div>
+
+
+
+            <div class="mb-3">
+                <InputText type="password" class="form-control"
+                           placeholder="Password (Strong)"
+                           @bind-Value="model.Password" />
+                <ValidationMessage For="@(() => model.Password)" />
+                <small class="text-muted">
+                    8+ chars, Upper + lower + number + symbol
+                </small>
+            </div>
+
+            <button class="btn btn-primary w-100" type="submit">
+                Register
+            </button>
+
+            <a href="/login" class="text-center mt-2 d-block">Already have an account? Login</a>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mt-2">@errorMessage</div>
+            }
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private RegisterDto model = new();
+    private string errorMessage = "";
+
+    private async Task RegisterUser()
+    {
+        errorMessage = "";
+
+        var success = await AuthConsumer.RegisterAsync(model);
+
+
+        Navigation.NavigateTo("/login", true);
+    }
+}

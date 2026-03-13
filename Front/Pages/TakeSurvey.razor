@@ -1,0 +1,338 @@
+﻿@page "/surveys/{SurveyId:int}"
+@attribute [Authorize(Roles = "Student,Employee")]
+
+@using Shared
+@using Microsoft.AspNetCore.Authorization
+@inject Front.Consumer.UserConsumer UserConsumer
+
+@inject Front.Consumer.ResponseConsumer ResponseConsumer
+@inject NavigationManager Nav
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-lg-9 col-xl-8">
+
+            <div class="card shadow-sm border-0 survey-card">
+                <div class="card-body p-4 p-md-5">
+
+                    <div class="d-flex align-items-start justify-content-between mb-4">
+                        <div>
+                            <h4 class="mb-1">Survey – @surveyTitle</h4>
+                            <div class="text-muted small">Answer the questions below, then submit.</div>
+                        </div>
+
+                        <button type="button" class="btn btn-light btn-sm" @onclick="GoBack">
+                            Back
+                        </button>
+                    </div>
+
+                    @if (loading)
+                    {
+                        <div class="alert alert-info">Loading...</div>
+                    }
+                    else if (questions.Count == 0)
+                    {
+                        <div class="alert alert-warning">No questions found.</div>
+                    }
+                    else
+                    {
+                        @if (!string.IsNullOrWhiteSpace(error))
+                        {
+                            <div class="alert alert-danger">@error</div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(successMessage))
+                        {
+                            <div class="alert alert-success">@successMessage</div>
+                        }
+
+                        <EditForm Model="@formModel" OnSubmit="Submit">
+                            <div class="row g-3">
+
+                                @foreach (var q in questions)
+                                {
+                                    <div class="col-12">
+                                        <div class="p-3 rounded-3 bg-light">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="me-3">
+                                                    <label class="form-label fw-semibold mb-1">
+                                                        @q.questiontext
+                                                    </label>
+
+                                                    @if (q.isrquired)
+                                                    {
+                                                        <div class="text-danger small">* Required</div>
+                                                    }
+                                                </div>
+
+                                                <span class="badge @(q.Type == QuestionType.Text ? "bg-secondary" : "bg-success")">
+                                                    @q.Type
+                                                </span>
+                                            </div>
+
+                                            @* ===== Answers UI ===== *@
+                                            @if (q.Type == QuestionType.Text)
+                                            {
+                                                <input class="form-control mt-2"
+                                                       placeholder="Type your answer..."
+                                                       value="@GetText(q.QuestionId)"
+                                                       @oninput="(e) => SetText(q.QuestionId, e.Value?.ToString())" />
+                                            }
+                                            else if (q.Type == QuestionType.SingleChoice)
+                                            {
+                                                <div class="mt-2">
+                                                    @foreach (var opt in optionsByQuestion.GetValueOrDefault(q.QuestionId, new List<QuestionOptionDto>()))
+                                                    {
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input"
+                                                                   type="radio"
+                                                                   name="q_@q.QuestionId"
+                                                                   value="@opt.OptionId"
+                                                                   checked="@(singleChoice.GetValueOrDefault(q.QuestionId) == opt.OptionId)"
+                                                                   @onchange="() => singleChoice[q.QuestionId] = opt.OptionId" />
+                                                            <label class="form-check-label">@opt.Text</label>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                            else if (q.Type == QuestionType.MultipleChoice)
+                                            {
+                                                <div class="mt-2">
+                                                    @{
+                                                        var set = multiChoice.GetValueOrDefault(q.QuestionId, new HashSet<int>());
+                                                    }
+
+                                                    @foreach (var opt in optionsByQuestion.GetValueOrDefault(q.QuestionId, new List<QuestionOptionDto>()))
+                                                    {
+                                                        var isChecked = set.Contains(opt.OptionId);
+
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input"
+                                                                   type="checkbox"
+                                                                   checked="@isChecked"
+                                                                   @onchange="() => ToggleMulti(q.QuestionId, opt.OptionId)" />
+                                                            <label class="form-check-label">@opt.Text</label>
+                                                        </div>
+                                                    }
+
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="d-flex gap-2 mt-4">
+                                <button class="btn btn-custom px-4" type="submit" disabled="@submitting">
+                                    @(submitting ? "Submitting..." : "Submit")
+                                </button>
+
+                                <button class="btn btn-outline-secondary px-4" type="button" @onclick="GoBack">
+                                    Cancel
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+@code {
+    [Parameter] public int SurveyId { get; set; }
+    private string? surveyTitle;
+
+
+    private bool loading = true;
+    private bool submitting = false;
+    private string? error;
+    private string? successMessage;
+
+    private int responseId;
+
+    private List<QuestionDto> questions = new();
+    private Dictionary<int, List<QuestionOptionDto>> optionsByQuestion = new();
+
+    // Answers stores
+    private Dictionary<int, string?> textAnswers = new();
+    private Dictionary<int, int?> singleChoice = new();
+    private Dictionary<int, HashSet<int>> multiChoice = new();
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            loading = true;
+
+            // 1) load questions
+            questions = await UserConsumer.GetUserSurveyQuestionAsync(SurveyId);
+            var survey = await UserConsumer.GetSurveyByIdAsync(SurveyId);
+            surveyTitle = survey?.Title;
+
+            // 2) load options for choice questions
+            foreach (var q in questions)
+            {
+
+                if (q.Type == QuestionType.SingleChoice || q.Type == QuestionType.MultipleChoice)
+                {
+                    var opts = await UserConsumer.GetUserQuestionOptionsAsync(q.QuestionId);
+                    optionsByQuestion[q.QuestionId] = opts;
+                }
+                else
+                {
+                    optionsByQuestion[q.QuestionId] = new List<QuestionOptionDto>();
+                }
+
+                // init answer containers
+                if (!textAnswers.ContainsKey(q.QuestionId))
+                    textAnswers[q.QuestionId] = null;
+                if (!singleChoice.ContainsKey(q.QuestionId))
+                    singleChoice[q.QuestionId] = null;
+                if (!multiChoice.ContainsKey(q.QuestionId))
+                    multiChoice[q.QuestionId] = new HashSet<int>();
+            }
+
+            // 3) create response (or returns existing one لو عملتي logic في backend)
+            responseId = await ResponseConsumer.CreateResponseAsync(SurveyId);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+    private void ToggleMulti(int questionId, int optionId)
+    {
+        if (!multiChoice.ContainsKey(questionId))
+            multiChoice[questionId] = new HashSet<int>();
+
+        if (multiChoice[questionId].Contains(optionId))
+            multiChoice[questionId].Remove(optionId);
+        else
+            multiChoice[questionId].Add(optionId);
+    }
+
+
+
+    private async Task Submit(EditContext _)
+    {
+        try
+        {
+            submitting = true;
+            error = null;
+            successMessage = null;
+
+
+            // client-side required validation (بس backend لازم برضه يتحقق)
+            foreach (var q in questions.Where(x => x.isrquired))
+            {
+                if (q.Type == QuestionType.Text && string.IsNullOrWhiteSpace(textAnswers[q.QuestionId]))
+                    throw new Exception($"Question '{q.questiontext}' is required.");
+
+                if (q.Type == QuestionType.SingleChoice && singleChoice[q.QuestionId] == null)
+                    throw new Exception($"Question '{q.questiontext}' is required.");
+
+                if (q.Type == QuestionType.MultipleChoice && multiChoice[q.QuestionId].Count == 0)
+                    throw new Exception($"Question '{q.questiontext}' is required.");
+            }
+
+            // إرسال الإجابات
+            foreach (var q in questions)
+            {
+                if (q.Type == QuestionType.Text)
+                {
+                    var txt = textAnswers[q.QuestionId];
+                    if (!string.IsNullOrWhiteSpace(txt))
+                    {
+                        await ResponseConsumer.AddAnswerAsync(responseId, new AnswerDto
+                        {
+                            QuestionId = q.QuestionId,
+                            ValueText = txt
+                        });
+                    }
+                }
+                else if (q.Type == QuestionType.SingleChoice)
+                {
+                    var optId = singleChoice[q.QuestionId];
+                    if (optId != null)
+                    {
+                        await ResponseConsumer.AddAnswerAsync(responseId, new AnswerDto
+                        {
+                            QuestionId = q.QuestionId,
+                            SelectedOptionId = optId.Value
+                        });
+                    }
+                }
+                else if (q.Type == QuestionType.MultipleChoice)
+                {
+                    foreach (var optId in multiChoice[q.QuestionId])
+                    {
+                        await ResponseConsumer.AddAnswerAsync(responseId, new AnswerDto
+                        {
+                            QuestionId = q.QuestionId,
+                            SelectedOptionId = optId
+                        });
+                    }
+                }
+            }
+
+            // Publish / Submit
+            await ResponseConsumer.SubmitAsync(responseId);
+
+            successMessage = "Submitted successfully ✅";
+            await Task.Delay(1200);
+            Nav.NavigateTo("/surveys/thanks", true);
+        }
+        catch (Exception ex)
+        {
+            error = ex.ToString();
+        }
+        finally
+        {
+            submitting = false;
+        }
+
+
+    }
+
+    private void GoBack()
+    {
+        Nav.NavigateTo("/surveys");
+    }
+
+    private TakeSurveyFormModel formModel = new();
+
+    private class TakeSurveyFormModel
+    {
+    }
+
+    private string GetText(int questionId)
+    => textAnswers.TryGetValue(questionId, out var v) ? v ?? "" : "";
+
+    private void SetText(int questionId, string? value)
+    {
+        textAnswers[questionId] = value ?? "";
+    }
+
+    private int? GetSingle(int questionId)
+    => singleChoice.TryGetValue(questionId, out var v) ? v : null;
+
+    private void SetSingle(int questionId, int optionId)
+    {
+        singleChoice[questionId] = optionId;
+        StateHasChanged();
+    }
+
+
+
+
+}
