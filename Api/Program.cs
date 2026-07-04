@@ -109,11 +109,11 @@ using (var scope = app.Services.CreateScope())
     {
         db.users.Add(new User
         {
-            Email = "admin@college.com",
+            Email = "",
             First_name = "System",
             Last_name = "Admin",
             Role = Role.Admin,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@12345")
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("")
         });
         db.SaveChanges();
     }
